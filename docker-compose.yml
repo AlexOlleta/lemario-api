@@ -1,0 +1,25 @@
+services:
+  lemario:
+    build: .
+    image: lemario
+    container_name: lemario
+    ports:
+      - "8000:8000"
+    # Carga LEMARIO_API_KEYS, límites, CORS, etc. desde .env (copia .env.example).
+    # required: false -> no falla si aún no has creado el .env.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Forzamos la ruta del índice dentro del volumen montado.
+      LEMARIO_DATABASE_PATH: /app/data/lemario.db
+    volumes:
+      # Conserva el índice y la caché de definiciones entre ejecuciones.
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 40s

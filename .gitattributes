@@ -1,0 +1,4 @@
+# Los scripts de shell deben mantener finales de línea LF para funcionar en
+# el contenedor Linux, aunque se editen en Windows.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
