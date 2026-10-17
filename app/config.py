@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,59 +16,73 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
-        # Desactiva el parseo JSON automático de campos lista: los leemos
-        # como CSV en _split_csv (p. ej. LEMARIO_API_KEYS=a,b,c).
+        # Las listas se leen como CSV (_split_csv), no como JSON.
         enable_decoding=False,
     )
 
-    # Storage
+    environment: Literal["development", "production"] = "development"
+
     database_path: str = "data/lemario.db"
 
-    # Security
     api_keys: list[str] = []
     api_key_header: str = "X-API-Key"
+    trusted_networks: list[str] = ["127.0.0.0/8", "::1/128"]
 
-    # Rate limiting
     rate_limit_default: str = "120/minute"
     rate_limit_definitions: str = "30/minute"
-    # /words/exists es local (sin red): puede ser mucho más generoso.
     rate_limit_exists: str = "600/minute"
+    rate_limit_storage: str = "memory://"
 
-    # CORS
     cors_origins: list[str] = ["*"]
 
-    # External sources
     rae_api_base: str = "https://rae-api.com/api/words"
     dle_base: str = "https://dle.rae.es"
     http_timeout: float = 10.0
     http_retries: int = 2
 
-    # Source word list
     list_repo: str = "rubenperezm/ListadosPalabrasRAE"
-    list_branch: str = "main"
+    list_branch: str = "379aec4fdfe9c4d678b435a0772b59649693a6a3"
 
-    # CREA frequency list (RAE, CC BY-SA 4.0). Local file: the RAE publishes
-    # it for download, so it is not fetched automatically.
     crea_path: str = "data/crea_lemas.txt"
-
-    # Frequency list (scripts/enrich_frequency.py). OpenSubtitles 2018,
-    # CC BY-SA 3.0: https://github.com/hermitdave/FrequencyWords
     freq_list_url: str = (
         "https://raw.githubusercontent.com/hermitdave/FrequencyWords/"
         "master/content/2018/es/es_full.txt"
     )
 
-    @field_validator("api_keys", "cors_origins", mode="before")
+    @field_validator("api_keys", "cors_origins", "trusted_networks", mode="before")
     @classmethod
     def _split_csv(cls, value: object) -> object:
-        """Permite definir listas como CSV en variables de entorno."""
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
+    @field_validator("trusted_networks")
+    @classmethod
+    def _check_networks(cls, value: list[str]) -> list[str]:
+        for network in value:
+            ipaddress.ip_network(network, strict=False)
+        return value
+
+    @model_validator(mode="after")
+    def _check_production(self) -> Settings:
+        if self.environment != "production":
+            return self
+        problems = []
+        if not self.api_keys:
+            problems.append("LEMARIO_API_KEYS está vacío (la API quedaría abierta)")
+        if "*" in self.cors_origins:
+            problems.append("LEMARIO_CORS_ORIGINS no puede ser '*'")
+        if problems:
+            raise ValueError("Configuración insegura para producción: " + "; ".join(problems))
+        return self
+
     @property
     def security_enabled(self) -> bool:
         return bool(self.api_keys)
+
+    @property
+    def trusted_nets(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        return [ipaddress.ip_network(n, strict=False) for n in self.trusted_networks]
 
 
 @lru_cache

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..database import get_connection
-from ..normalize import first_letter, normalize_word
+from ..normalize import first_letter, matches_ending, normalize_ending, normalize_word
 
 
 def _phrase_clause(include_phrases: bool) -> str:
@@ -118,7 +118,7 @@ def _like_pattern(q: str, mode: str) -> str:
         return f"{escaped}%"
     if mode == "suffix":
         return f"%{escaped}"
-    return f"%{escaped}%"  # contains (por defecto)
+    return f"%{escaped}%"
 
 
 def words_by_substring(
@@ -148,15 +148,51 @@ def words_by_substring(
     )
     with get_connection(read_only=True) as conn:
         total = conn.execute(
-            f"SELECT COUNT(*) FROM words "
-            f"WHERE word_norm LIKE ? ESCAPE '\\'{clause}",
-            (pattern,),
+            f"SELECT COUNT(*) FROM words WHERE word_norm LIKE ? ESCAPE '\\'{clause}",
+            (pattern, *freq_params),
         ).fetchone()[0]
         rows = conn.execute(
             f"SELECT word FROM words "
             f"WHERE word_norm LIKE ? ESCAPE '\\'{clause} "
             "ORDER BY word_norm LIMIT ? OFFSET ?",
             (pattern, *freq_params, limit, offset),
+        ).fetchall()
+    return total, [r["word"] for r in rows]
+
+
+def words_by_rhyme(
+    ending: str,
+    *,
+    limit: int,
+    offset: int,
+    include_phrases: bool,
+    include_affixes: bool,
+    include_proper: bool,
+    tier: str | None = None,
+    min_zipf: float | None = None,
+) -> tuple[int, list[str]]:
+    """Rima consonante con la terminación. Devuelve (total, página).
+
+    ``word_norm LIKE`` descarta casi todo barato; ``matches_ending`` afina con la
+    grafía oficial, donde la tilde cuenta.
+    """
+    end = normalize_ending(ending)
+    pattern = _like_pattern(end, "suffix")
+    freq_sql, freq_params = _freq_clause(tier, min_zipf)
+    clause = (
+        _phrase_clause(include_phrases)
+        + _affix_clause(include_affixes)
+        + _proper_clause(include_proper)
+        + freq_sql
+    )
+    where = f"word_norm LIKE ? ESCAPE '\\' AND rhyme_match(word, ?){clause}"
+    params = (pattern, end, *freq_params)
+    with get_connection(read_only=True) as conn:
+        conn.create_function("rhyme_match", 2, matches_ending, deterministic=True)
+        total = conn.execute(f"SELECT COUNT(*) FROM words WHERE {where}", params).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT word FROM words WHERE {where} ORDER BY word_norm LIMIT ? OFFSET ?",
+            (*params, limit, offset),
         ).fetchall()
     return total, [r["word"] for r in rows]
 
@@ -330,8 +366,7 @@ def frequency_info() -> dict[str, str | None]:
     """
     with get_connection(read_only=True) as conn:
         rows = conn.execute(
-            "SELECT key, value FROM meta "
-            "WHERE key IN ('freq_sources', 'freq_updated_at')"
+            "SELECT key, value FROM meta WHERE key IN ('freq_sources', 'freq_updated_at')"
         ).fetchall()
     data = {row["key"]: row["value"] for row in rows}
     return {

@@ -26,8 +26,13 @@ montándola dentro de otra aplicación.
   **Zipf** y un nivel (`common`/`medium`/`rare`/`unknown`), para que un juego
   pueda pedir palabras justas en vez de `avugo`. Se rellena con
   `scripts/enrich_frequency.py`.
-- 🔒 **Seguridad**: API key opcional, *rate limiting* por IP, CORS configurable
-  y *timeouts*/reintentos en las llamadas externas.
+- 🎵 **Rima consonante** (`/words/rhymes`): palabras que terminan igual que una
+  terminación dada, con la tilde estricta (`anto` no incluye `cantó`) y los
+  monosílabos como excepción (`ón` incluye `son`).
+- 🔒 **Seguridad**: API key opcional, *rate limiting* por IP, CORS configurable,
+  *timeouts*/reintentos en las llamadas externas, `/docs` y el detalle de
+  `/health` solo desde redes internas, y un modo `production` que se niega a
+  arrancar con una configuración insegura.
 
 ## Normalización (acentos y ñ)
 
@@ -185,6 +190,11 @@ uvicorn app.main:app --reload
 - Documentación interactiva: `http://127.0.0.1:8000/docs`
 - Estado e info del índice: `http://127.0.0.1:8000/health`
 
+`/docs`, `/redoc`, `/openapi.json` y el detalle de `/health` (versión, tamaño
+del índice) solo responden a clientes de las **redes internas**
+(`LEMARIO_TRUSTED_NETWORKS`, por defecto `127.0.0.0/8` y `::1`); desde fuera,
+la documentación da 404 y `/health` solo dice `{"status": "ok", "index_ready": …}`.
+
 ## Endpoints
 
 Todos (salvo `/health` y `/`) requieren la cabecera de API key si has
@@ -196,6 +206,7 @@ configurado `LEMARIO_API_KEYS`.
 | `GET` | `/words/by-length/{length}` | Palabras por número de letras. `?limit&offset&include_phrases&include_affixes`&tier&min_zipf |
 | `GET` | `/words/search` | Palabras que contienen un substring. `?q&mode&limit&offset&include_phrases&include_affixes`&tier&min_zipf |
 | `GET` | `/words/pattern` | Palabras que casan con un patrón con comodines. `?p&length&limit&offset&include_phrases&include_affixes`&tier&min_zipf |
+| `GET` | `/words/rhymes` | Palabras que riman en consonante con una terminación. `?ending&limit&offset&include_phrases&include_affixes`&include_proper&tier&min_zipf |
 | `GET` | `/words/exists/{palabra}` | ¿Está en el lemario? Devuelve la grafía oficial. |
 | `GET` | `/words/exists` | Comprobación en lote. `?w=casa&w=cosa` (hasta 100) |
 | `GET` | `/words/random` | Palabra aleatoria. `?letter&length&include_phrases&include_affixes`&tier&min_zipf |
@@ -226,6 +237,10 @@ curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/words/pattern?p=c_s_&length
 # Patrón con '*' (cero o más letras): todo lo que acabe en "nción"
 curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/words/pattern?p=*nción"
 
+# Rima consonante: la tilde es estricta. "anto" -> canto, santo (no "cantó");
+# "ón" -> canción, corazón y además los monosílabos (son, pon), que no llevan tilde
+curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/words/rhymes?ending=ón"
+
 # ¿Existe "arbol"? -> exists: true, word: "árbol" (la búsqueda ignora tildes)
 curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/words/exists/arbol"
 
@@ -251,13 +266,24 @@ curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/definitions/casa"
 curl -H "X-API-Key: TU_CLAVE" "http://127.0.0.1:8000/definitions/casa?force=true"
 ```
 
-## Tests
+## Calidad (CI local)
 
 ```bash
 pip install -r requirements-dev.txt
-pytest                 # pruebas deterministas (sin red)
-pytest --run-network   # incluye además una prueba real contra rae-api
+python -m scripts.check             # ruff (lint + formato) y pytest; falla si algo falla
+python -m scripts.check --fix       # aplica antes los arreglos automáticos de ruff
+python -m scripts.check --network   # incluye la prueba real contra rae-api
+pytest                              # solo las pruebas, deterministas (sin red)
 ```
+
+Para que `git commit` lo ejecute solo (una vez por clon):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+El día que haya un CI remoto (GitHub Actions, etc.), su único paso es
+`pip install -r requirements-dev.txt && python -m scripts.check`.
 
 Cubren los casos delicados del español: agrupación de tildes (`águila` bajo `a`),
 la `ñ` como letra propia (`ano` ≠ `año`), conteo de letras ignorando
@@ -266,19 +292,50 @@ espacios/guiones, autenticación, y la definición de una palabra poco común
 
 ## Docker
 
+La imagen instala las versiones exactas de `requirements.lock` y corre como un
+usuario sin privilegios (uid 10001).
+
 ```bash
 docker build -t lemario .
 # La primera vez construye el índice dentro del contenedor (necesita red).
-# Monta un volumen para conservar el índice y la caché entre ejecuciones:
-docker run -p 8000:8000 -e LEMARIO_API_KEYS=tu_clave -v "${PWD}/data:/app/data" lemario
+# Monta un volumen para conservar el índice y la caché entre ejecuciones.
+# Con Docker Desktop, tu máquina llega con la IP del puente de Docker: para
+# poder abrir /docs hay que declarar esas redes como internas.
+docker run -p 127.0.0.1:8000:8000 -e LEMARIO_API_KEYS=tu_clave \
+  -e LEMARIO_TRUSTED_NETWORKS=127.0.0.0/8,172.16.0.0/12,192.168.0.0/16 \
+  -v "${PWD}/data:/app/data" lemario
 ```
 
-O con **docker-compose** (lee `.env` si existe y monta `./data` como volumen):
+O con **docker-compose** (lee `.env` si existe y monta `./data` como volumen).
+Ya publica el puerto solo en `127.0.0.1` y declara las redes internas de Docker:
 
 ```bash
 cp .env.example .env   # opcional: define LEMARIO_API_KEYS y demás
 docker compose up --build
 ```
+
+En Linux, `./data` debe poder escribirlo el uid del contenedor:
+`sudo chown -R 10001:10001 ./data`.
+
+### Pasar a producción más adelante
+
+Hoy está pensado para uso local. Lo que ya está dejado a punto, y lo que se
+cambia cuando llegue el momento:
+
+| Qué | Cómo |
+|-----|------|
+| Rechazar configuraciones inseguras | `LEMARIO_ENVIRONMENT=production`: no arranca sin `LEMARIO_API_KEYS` ni con `LEMARIO_CORS_ORIGINS=*` |
+| Quién ve la documentación | `LEMARIO_TRUSTED_NETWORKS` (solo loopback por defecto) |
+| Exponerlo a la red | `LEMARIO_BIND=0.0.0.0` en `.env` **y** un proxy inverso con HTTPS (Caddy, Nginx, Traefik) delante |
+| IP real del cliente tras el proxy | `FORWARDED_ALLOW_IPS=<IP del proxy>` (nunca `*`). Sin esto, el proxy es "el cliente": el *rate limit* se vuelve global y las redes internas se evalúan mal |
+| Varios workers o réplicas | `WEB_CONCURRENCY=N` y `LEMARIO_RATE_LIMIT_STORAGE=redis://…` (instala `redis`); la API avisa al arrancar si falta |
+| Actualizar el lemario | Cambia `LEMARIO_LIST_BRANCH` (va fijado a un commit) y reconstruye con `--force` |
+| Definiciones | Revisa antes los términos de la RAE y de rae-api.com (ver `NOTICE.md`) |
+
+Pendiente a propósito (solo importa con tráfico real): las consultas de
+definiciones usan SQLite y `BeautifulSoup` de forma síncrona dentro de un
+endpoint `async`, y la caché de definiciones es SQLite (varios procesos
+escribiendo pueden chocar).
 
 ## Configuración
 
@@ -286,9 +343,12 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
 
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
+| `LEMARIO_ENVIRONMENT` | `development` | `production` exige claves y un CORS que no sea `*` |
 | `LEMARIO_DATABASE_PATH` | `data/lemario.db` | Ruta del SQLite |
 | `LEMARIO_API_KEYS` | *(vacío)* | Claves válidas (CSV). Vacío = API abierta (solo dev) |
 | `LEMARIO_API_KEY_HEADER` | `X-API-Key` | Cabecera de la clave |
+| `LEMARIO_TRUSTED_NETWORKS` | `127.0.0.0/8,::1/128` | Redes (CIDR, CSV) que ven `/docs` y el detalle de `/health` |
+| `LEMARIO_RATE_LIMIT_STORAGE` | `memory://` | Dónde se cuentan las peticiones; `redis://…` con varios workers |
 | `LEMARIO_RATE_LIMIT_DEFAULT` | `120/minute` | Límite global por IP |
 | `LEMARIO_RATE_LIMIT_DEFINITIONS` | `30/minute` | Límite del endpoint de definiciones |
 | `LEMARIO_RATE_LIMIT_EXISTS` | `600/minute` | Límite de `/words/exists` (consulta local, sin red) |
@@ -296,7 +356,7 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
 | `LEMARIO_HTTP_TIMEOUT` | `10` | Timeout (s) de llamadas externas |
 | `LEMARIO_HTTP_RETRIES` | `2` | Reintentos de llamadas externas |
 | `LEMARIO_LIST_REPO` | `rubenperezm/ListadosPalabrasRAE` | Repo del lemario |
-| `LEMARIO_LIST_BRANCH` | `main` | Rama del repo |
+| `LEMARIO_LIST_BRANCH` | *(un commit)* | Rama, etiqueta o commit del repo (fijado a un commit) |
 | `LEMARIO_CREA_PATH` | `data/crea_lemas.txt` | Fichero de lemas de CREA (local, no se descarga) |
 | `LEMARIO_FREQ_LIST_URL` | *(OpenSubtitles 2018)* | Lista de frecuencias para `enrich_frequency.py` |
 
@@ -309,6 +369,10 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
   Por eso es un respaldo *best-effort*: hacerlo de forma fiable exigiría un
   navegador real. El parser soporta tanto el marcado clásico (`<p class="j">`)
   como el nuevo (acepciones numeradas dentro del `<article>`).
+- **Playwright (opcional):** `scripts/fetch_definition_playwright.py` es una
+  prueba aparte, fuera de la API, que consulta el DLE con un Chromium real.
+  Necesita `pip install -r requirements-dev.txt` y `playwright install chromium`
+  (el navegador no viene con el paquete). Uso: `python -m scripts.fetch_definition_playwright casa`.
 - **Es un lemario, no un corpus de formas.** Están `correr` y `casa`, no
   `corría` ni `casas`. Para un diccionario es lo correcto; un juego que valide
   los intentos del jugador con `/words/exists` rechazará plurales y verbos
@@ -321,9 +385,12 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
 
 ## Fuentes y licencias
 
+Resumen; la atribución completa y qué implica redistribuir cada cosa está en
+[NOTICE.md](NOTICE.md).
+
 | Dato | Fuente | Licencia |
 |------|--------|----------|
-| Lemario | [Listados RAE de rubenperezm](https://github.com/rubenperezm/ListadosPalabrasRAE) | del repositorio |
+| Lemario | [Listados RAE de rubenperezm](https://github.com/rubenperezm/ListadosPalabrasRAE) (de [iedra.es](https://iedra.es/)) | Apache-2.0 el repositorio; el contenido es de la RAE |
 | Definiciones | [rae-api.com](https://rae-api.com/) y [dle.rae.es](https://dle.rae.es/) | términos de cada fuente |
 | Frecuencias (principal) | **[CREA anotado](https://www.rae.es/crea-anotado/)**, Real Academia Española | **CC BY-SA 4.0** |
 | Frecuencias (secundaria) | [wordfreq](https://github.com/rspeer/wordfreq) | MIT (código) |

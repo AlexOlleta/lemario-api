@@ -4,17 +4,17 @@ services:
     image: lemario
     container_name: lemario
     ports:
-      - "8000:8000"
-    # Carga LEMARIO_API_KEYS, límites, CORS, etc. desde .env (copia .env.example).
-    # required: false -> no falla si aún no has creado el .env.
+      - "${LEMARIO_BIND:-127.0.0.1}:8000:8000"
     env_file:
       - path: .env
         required: false
     environment:
-      # Forzamos la ruta del índice dentro del volumen montado.
       LEMARIO_DATABASE_PATH: /app/data/lemario.db
+      # Docker Desktop entrega las peticiones desde la IP privada del puente.
+      LEMARIO_TRUSTED_NETWORKS: ${LEMARIO_TRUSTED_NETWORKS:-127.0.0.0/8,::1/128,172.16.0.0/12,192.168.0.0/16}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
     volumes:
-      # Conserva el índice y la caché de definiciones entre ejecuciones.
       - ./data:/app/data
     restart: unless-stopped
     healthcheck:

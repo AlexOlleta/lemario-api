@@ -34,7 +34,6 @@ async def definition(
         description="Exigir que la palabra esté en el lemario RAE antes de consultar.",
     ),
 ) -> Definition:
-    # Si tenemos el índice y se exige, comprobamos que la palabra exista.
     if require_in_list and database_exists():
         official = repository.word_exists(word)
         if official is None:
@@ -51,9 +50,9 @@ async def definition(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No se encontró definición para '{word}'.",
-        )
+        ) from None
     except SourceUnavailable as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Fuentes de definiciones no disponibles: {exc}",
-        )
+        ) from exc

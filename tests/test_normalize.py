@@ -18,10 +18,10 @@ from app.normalize import (
 @pytest.mark.parametrize(
     "word,expected",
     [
-        ("águila", "a"),   # tilde inicial -> letra base
-        ("Árbol", "a"),    # mayúscula con tilde
+        ("águila", "a"),  # tilde inicial -> letra base
+        ("Árbol", "a"),  # mayúscula con tilde
         ("éxito", "e"),
-        ("ñandú", "ñ"),    # la ñ es letra propia, no se convierte en 'n'
+        ("ñandú", "ñ"),  # la ñ es letra propia, no se convierte en 'n'
         ("Ñoño", "ñ"),
         ("zaherir", "z"),
     ],
@@ -31,14 +31,12 @@ def test_first_letter(word, expected):
 
 
 def test_enye_is_distinct_from_n():
-    # 'año' y 'ano' NO deben colapsar a la misma forma normalizada.
     assert normalize_word("año") == "año"
     assert normalize_word("ano") == "ano"
     assert normalize_word("año") != normalize_word("ano")
 
 
 def test_accent_insensitive_search():
-    # Buscar sin tilde debe llevar a la misma forma normalizada.
     assert normalize_word("café") == normalize_word("cafe") == "cafe"
     assert normalize_word("ÁGUILA") == "aguila"
 
@@ -53,9 +51,9 @@ def test_strip_accents_keeps_enye():
     [
         ("café", 4),
         ("ñandú", 5),
-        ("ñoñería", 7),     # ñ-o-ñ-e-r-í-a
-        ("a priori", 7),    # ignora el espacio
-        ("-algia", 5),      # ignora el guion
+        ("ñoñería", 7),  # ñ-o-ñ-e-r-í-a
+        ("a priori", 7),  # ignora el espacio
+        ("-algia", 5),  # ignora el guion
     ],
 )
 def test_letter_count(word, expected):
@@ -70,11 +68,11 @@ def test_is_phrase():
 @pytest.mark.parametrize(
     "word,expected",
     [
-        ("-algia", True),           # sufijo: guion inicial
+        ("-algia", True),  # sufijo: guion inicial
         ("-logía", True),
-        ("supra-", True),           # prefijo: guion final
+        ("supra-", True),  # prefijo: guion final
         ("hetero-", True),
-        ("ping-pong", False),       # guion interior: palabra compuesta
+        ("ping-pong", False),  # guion interior: palabra compuesta
         ("espacio-tiempo", False),
         ("casa", False),
     ],
@@ -88,10 +86,10 @@ def test_is_affix(word, expected):
     [
         ("Madrid", True),
         ("Alzheimer", True),
-        ("Chile", True),      # el país
-        ("chile", False),     # el ají: el lemario tiene las dos entradas
-        ("mateo", False),     # nombre común en Chile, aunque exista 'Mateo'
-        ("ADN", False),       # sigla, no nombre propio
+        ("Chile", True),  # el país
+        ("chile", False),  # el ají: el lemario tiene las dos entradas
+        ("mateo", False),  # nombre común en Chile, aunque exista 'Mateo'
+        ("ADN", False),  # sigla, no nombre propio
         ("CD-ROM", False),
         ("casa", False),
     ],

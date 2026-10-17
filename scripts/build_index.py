@@ -22,9 +22,9 @@ import httpx
 # Permite ejecutar como script suelto (python scripts/build_index.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import get_settings  # noqa: E402
-from app.database import get_connection, init_schema  # noqa: E402
-from app.normalize import (  # noqa: E402
+from app.config import get_settings
+from app.database import get_connection, init_schema
+from app.normalize import (
     first_letter,
     is_affix,
     is_phrase,
@@ -44,10 +44,18 @@ def version_key(filename: str) -> tuple[int, ...] | None:
     return tuple(int(part) for part in match.group(1).split("-"))
 
 
-def discover_latest_file(repo: str) -> tuple[str, str]:
-    """Devuelve (nombre, download_url) del fichero de versión más alta."""
+def discover_latest_file(repo: str, ref: str) -> tuple[str, str]:
+    """Devuelve (nombre, download_url) del fichero de versión más alta en ``ref``.
+
+    ``ref`` es la rama, etiqueta o commit configurado (LEMARIO_LIST_BRANCH).
+    """
     api = f"https://api.github.com/repos/{repo}/contents/"
-    resp = httpx.get(api, timeout=30, headers={"Accept": "application/vnd.github+json"})
+    resp = httpx.get(
+        api,
+        params={"ref": ref},
+        timeout=30,
+        headers={"Accept": "application/vnd.github+json"},
+    )
     resp.raise_for_status()
     candidates: list[tuple[tuple[int, ...], str, str]] = []
     for entry in resp.json():
@@ -105,8 +113,7 @@ def build(words_text: str, list_file: str) -> int:
 
     with get_connection() as conn:
         init_schema(conn)
-        # Reconstruimos la tabla de palabras desde cero (la caché de
-        # definiciones se conserva porque es independiente).
+        # La caché de definiciones se conserva: es independiente.
         conn.execute("DROP TABLE IF EXISTS words")
         init_schema(conn)
         conn.executemany(
@@ -159,8 +166,9 @@ def main(argv: list[str] | None = None) -> int:
             url = raw_url(settings.list_repo, settings.list_branch, list_file)
             print(f"Descargando fichero indicado: {list_file}")
         else:
-            print(f"Detectando última edición en {settings.list_repo}...")
-            list_file, url = discover_latest_file(settings.list_repo)
+            ref = settings.list_branch[:12]
+            print(f"Detectando última edición en {settings.list_repo}@{ref}...")
+            list_file, url = discover_latest_file(settings.list_repo, settings.list_branch)
             print(f"Última edición detectada: {list_file}")
         text = download_text(url)
 

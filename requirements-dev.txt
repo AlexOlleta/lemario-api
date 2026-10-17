@@ -1,5 +1,6 @@
 -r requirements.txt
 pytest>=8
+ruff>=0.5
 playwright>=1.44
 # Fuente principal de frecuencias (scripts/enrich_frequency.py).
 wordfreq>=3.1

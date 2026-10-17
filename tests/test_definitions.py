@@ -14,9 +14,6 @@ from app.services import definitions
 from app.services.definitions import SourceUnavailable
 
 
-# --------------------------------------------------------------------------- #
-# Parsers (unidad)
-# --------------------------------------------------------------------------- #
 def test_parse_rae_api():
     payload = {
         "ok": True,
@@ -53,9 +50,6 @@ def test_parse_dle_html():
     assert "prueba" in senses[0].description
 
 
-# --------------------------------------------------------------------------- #
-# Endpoint /definitions con fuentes simuladas
-# --------------------------------------------------------------------------- #
 def test_definition_from_rae_then_cache(client, auth, monkeypatch):
     calls = {"n": 0}
 
@@ -71,7 +65,6 @@ def test_definition_from_rae_then_cache(client, auth, monkeypatch):
     assert body["source"] == "rae-api"
     assert body["cached"] is False
 
-    # La segunda vez debe servirse de la caché, sin volver a llamar a la fuente.
     r2 = client.get("/definitions/café", headers=auth)
     assert r2.json()["source"] == "cache"
     assert r2.json()["cached"] is True
@@ -126,7 +119,6 @@ def test_rare_word_not_found(client, auth, monkeypatch):
 
 
 def test_word_not_in_lemario_is_rejected(client, auth):
-    # No está en el lemario y require_in_list por defecto es True -> 404 sin red.
     r = client.get("/definitions/asdfghjk", headers=auth)
     assert r.status_code == 404
     assert "lemario" in r.json()["detail"].lower()
@@ -146,9 +138,6 @@ def test_sources_unavailable_returns_502(client, auth, monkeypatch):
     assert r.status_code == 502
 
 
-# --------------------------------------------------------------------------- #
-# Prueba real opcional (palabra poco común) — requiere --run-network
-# --------------------------------------------------------------------------- #
 def test_load_from_cache_without_db(monkeypatch):
     """Sin índice, la caché debe comportarse como vacía (no lanzar 500)."""
     monkeypatch.setattr(definitions, "database_exists", lambda: False)
@@ -157,10 +146,7 @@ def test_load_from_cache_without_db(monkeypatch):
 
 @pytest.mark.network
 def test_real_rare_word_definition(client, auth):
-    # 'inefable' es una palabra poco común; consulta la fuente real (rae-api).
-    r = client.get(
-        "/definitions/inefable?require_in_list=false", headers=auth
-    )
+    r = client.get("/definitions/inefable?require_in_list=false", headers=auth)
     assert r.status_code == 200
     body = r.json()
     assert body["source"] in {"rae-api", "dle.rae.es"}

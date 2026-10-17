@@ -1,0 +1,11 @@
+#!/bin/sh
+# Hook de git: no deja commitear si fallan el lint, el formato o las pruebas.
+# Actívalo una vez por clon:  git config core.hooksPath .githooks
+cd "$(git rev-parse --show-toplevel)" || exit 1
+for py in .venv/Scripts/python .venv/bin/python python3 python; do
+    if command -v "$py" >/dev/null 2>&1; then
+        exec "$py" -m scripts.check
+    fi
+done
+echo "No se encontró Python para ejecutar las comprobaciones." >&2
+exit 1

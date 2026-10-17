@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 
@@ -20,7 +20,7 @@ router = APIRouter(
 )
 
 
-class Tier(str, Enum):
+class Tier(StrEnum):
     """Nivel de frecuencia de uso (ver app/frequency.py)."""
 
     common = "common"
@@ -29,7 +29,7 @@ class Tier(str, Enum):
     unknown = "unknown"
 
 
-class SearchMode(str, Enum):
+class SearchMode(StrEnum):
     """Modo de coincidencia del substring."""
 
     contains = "contains"
@@ -244,6 +244,69 @@ def pattern(
     )
     return WordList(
         criterion=f"pattern={p.lower()}",
+        total=total,
+        limit=limit,
+        offset=offset,
+        count=len(words),
+        words=words,
+    )
+
+
+@router.get("/rhymes", response_model=WordList)
+def rhymes(
+    request: Request,
+    ending: str = Query(
+        ...,
+        min_length=1,
+        max_length=30,
+        description="Terminación de la rima consonante, desde la vocal tónica: 'ijo', 'ón'.",
+    ),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    include_phrases: bool = Query(
+        False, description="Incluir locuciones (rima la última palabra)."
+    ),
+    include_affixes: bool = Query(
+        False, description="Incluir afijos: prefijos y sufijos ('supra-', '-algia')."
+    ),
+    include_proper: bool = Query(
+        False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
+    ),
+    tier: Tier | None = Query(
+        None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
+    ),
+    min_zipf: float | None = Query(
+        None, ge=0, le=8, description="Frecuencia Zipf mínima (4 ≈ uso cotidiano)."
+    ),
+) -> WordList:
+    """Palabras que riman en consonante con una terminación dada.
+
+    La tilde es estricta: 'anto' encuentra 'canto' pero no 'cantó', y 'ó' sí
+    encuentra 'cantó'. Con tilde en la terminación se añaden los monosílabos,
+    que no la llevan ('ón' encuentra 'canción' y también 'son'). Sin tilde, la
+    terminación es literal. La rima se busca sobre el lemario, que casi no trae
+    formas conjugadas ni plurales.
+    """
+    ending = ending.strip()
+    if not ending.isalpha():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="La terminación solo puede contener letras (con tilde, ñ o ü).",
+        )
+    _ensure_db()
+    tier_name, min_zipf = _freq_filter(tier, min_zipf)
+    total, words = repository.words_by_rhyme(
+        ending,
+        limit=limit,
+        offset=offset,
+        include_phrases=include_phrases,
+        include_affixes=include_affixes,
+        include_proper=include_proper,
+        tier=tier_name,
+        min_zipf=min_zipf,
+    )
+    return WordList(
+        criterion=f"rhyme={ending.lower()}",
         total=total,
         limit=limit,
         offset=offset,

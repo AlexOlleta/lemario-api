@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -39,9 +39,9 @@ import httpx
 # Permite ejecutar como script suelto (python scripts/enrich_frequency.py).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import get_settings  # noqa: E402
-from app.database import get_connection, init_schema  # noqa: E402
-from app.frequency import (  # noqa: E402
+from app.config import get_settings
+from app.database import get_connection, init_schema
+from app.frequency import (
     count_to_zipf,
     fpm_to_zipf,
     tier_for,
@@ -130,9 +130,7 @@ def resolve_zipf(
         exact = crea.get(word)
         if exact:
             return fpm_to_zipf(exact), "crea"
-        if word == word.lower() and (
-            crea.get(word.capitalize()) or crea.get(word.upper())
-        ):
+        if word == word.lower() and (crea.get(word.capitalize()) or crea.get(word.upper())):
             return 0.0, None
 
     if zipf_frequency is not None:
@@ -168,9 +166,7 @@ def enrich(
     with get_connection() as conn:
         init_schema(conn)
         for row in conn.execute("SELECT id, word FROM words").fetchall():
-            zipf, source = resolve_zipf(
-                row["word"], crea, zipf_frequency, counts, corpus_total
-            )
+            zipf, source = resolve_zipf(row["word"], crea, zipf_frequency, counts, corpus_total)
             stats[source or "unknown"] += 1
             updates.append((zipf, tier_for(zipf), source, row["id"]))
 
@@ -192,7 +188,7 @@ def enrich(
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             [
                 ("freq_sources", sources),
-                ("freq_updated_at", datetime.now(timezone.utc).isoformat()),
+                ("freq_updated_at", datetime.now(UTC).isoformat()),
             ],
         )
     stats["total"] = len(updates)
@@ -206,12 +202,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--crea", help="Fichero de lemas de CREA (por defecto, el de data/).")
     parser.add_argument("--no-crea", action="store_true", help="No usar CREA.")
-    parser.add_argument(
-        "--local", help="Fichero local de OpenSubtitles ('palabra apariciones')."
-    )
-    parser.add_argument(
-        "--no-wordfreq", action="store_true", help="No usar el paquete wordfreq."
-    )
+    parser.add_argument("--local", help="Fichero local de OpenSubtitles ('palabra apariciones').")
+    parser.add_argument("--no-wordfreq", action="store_true", help="No usar el paquete wordfreq.")
     parser.add_argument(
         "--no-opensubtitles",
         action="store_true",

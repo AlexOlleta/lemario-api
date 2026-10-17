@@ -2,3 +2,4 @@
 # el contenedor Linux, aunque se editen en Windows.
 *.sh text eol=lf
 docker-entrypoint.sh text eol=lf
+.githooks/* text eol=lf

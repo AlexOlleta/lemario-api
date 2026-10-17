@@ -12,7 +12,6 @@ import tempfile
 
 import pytest
 
-# --- Entorno de prueba: debe fijarse antes de importar app.* ---
 _TMPDIR = tempfile.mkdtemp(prefix="lemario-test-")
 os.environ["LEMARIO_DATABASE_PATH"] = os.path.join(_TMPDIR, "test.db")
 os.environ["LEMARIO_API_KEYS"] = "testkey"
@@ -32,25 +31,24 @@ from app.normalize import (  # noqa: E402
     normalize_word,
 )
 
-# Palabras curadas con los casos delicados del español.
 TEST_WORDS = [
-    "águila",   # empieza por 'á' -> debe agruparse bajo 'a'
-    "ano",      # 'ano' y 'año' deben ser distintas (ñ es letra propia)
+    "águila",  # empieza por 'á' -> debe agruparse bajo 'a'
+    "ano",  # 'ano' y 'año' deben ser distintas (ñ es letra propia)
     "año",
-    "a priori", # locución (con espacio)
-    "café",     # tilde final
+    "a priori",  # locución (con espacio)
+    "café",  # tilde final
     "casa",
-    "ñandú",    # empieza por 'ñ'
+    "ñandú",  # empieza por 'ñ'
     "ñoño",
     "ñoñería",  # ñ + tilde
     "perro",
     "zaherir",  # palabra poco común
-    "-algia",   # sufijo (afijo con guion inicial)
-    "supra-",   # prefijo (afijo con guion final)
-    "ping-pong",# guion interior: palabra compuesta, NO es afijo
-    "Madrid",   # nombre propio
-    "CD",       # sigla: va en mayúsculas pero NO es nombre propio
-    "Bruselas", # el par Bruselas/bruselas comparte forma normalizada
+    "-algia",  # sufijo (afijo con guion inicial)
+    "supra-",  # prefijo (afijo con guion final)
+    "ping-pong",  # guion interior: palabra compuesta, NO es afijo
+    "Madrid",  # nombre propio
+    "CD",  # sigla: va en mayúsculas pero NO es nombre propio
+    "Bruselas",  # el par Bruselas/bruselas comparte forma normalizada
     "bruselas",
 ]
 
@@ -91,10 +89,8 @@ def _build_test_db() -> None:
             "is_proper) VALUES (?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
-        # Enriquecimiento simulado: lo que dejaría scripts/enrich_frequency.py.
         conn.executemany(
-            "UPDATE words SET zipf = ?, freq_tier = ?, freq_source = 'test' "
-            "WHERE word = ?",
+            "UPDATE words SET zipf = ?, freq_tier = ?, freq_source = 'test' WHERE word = ?",
             [(z, tier_for(z), w) for w, z in TEST_ZIPF.items()],
         )
         conn.execute(
@@ -112,7 +108,14 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(app)
+    """Cliente desde loopback: una red interna (LEMARIO_TRUSTED_NETWORKS)."""
+    return TestClient(app, client=("127.0.0.1", 50000))
+
+
+@pytest.fixture
+def outside_client() -> TestClient:
+    """Cliente desde una IP pública (documentación RFC 5737): fuera de las redes internas."""
+    return TestClient(app, client=("203.0.113.9", 50000))
 
 
 @pytest.fixture
@@ -128,7 +131,6 @@ def _clear_definitions_cache():
     yield
 
 
-# --- Soporte para pruebas que tocan la red real ---
 def pytest_addoption(parser):
     parser.addoption(
         "--run-network",

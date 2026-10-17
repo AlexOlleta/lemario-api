@@ -21,9 +21,7 @@ def test_parse_crea_keeps_case_and_sums_categories():
     # 'chile' y 'Chile' son entradas distintas: es lo que hace útil a CREA.
     assert crea["chile"] == 7.62
     assert crea["Chile"] == 90.70
-    # Un mismo lema en dos categorías se suma.
     assert crea["que"] == 12967.73 + 13000.00
-    # Los signos de puntuación no son palabras.
     assert "," not in crea
 
 

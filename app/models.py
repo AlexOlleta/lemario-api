@@ -39,12 +39,8 @@ class WordExists(BaseModel):
     is_proper: bool | None = Field(
         None, description="True si es un nombre propio ('Madrid'); las siglas no."
     )
-    zipf: float | None = Field(
-        None, description="Frecuencia en escala Zipf; 0 si no hay datos."
-    )
-    tier: str | None = Field(
-        None, description="Nivel: 'common', 'medium', 'rare' o 'unknown'."
-    )
+    zipf: float | None = Field(None, description="Frecuencia en escala Zipf; 0 si no hay datos.")
+    tier: str | None = Field(None, description="Nivel: 'common', 'medium', 'rare' o 'unknown'.")
 
 
 class WordExistsList(BaseModel):

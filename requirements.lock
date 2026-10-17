@@ -1,0 +1,34 @@
+# Versiones exactas de las dependencias de ejecución (Python 3.12, como la imagen Docker).
+# Regenerar: crear un venv limpio con 3.12, pip install -r requirements.txt, pip freeze.
+# Esto es lo que instala el Dockerfile; requirements.txt solo declara rangos.
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+beautifulsoup4==4.15.0
+certifi==2026.7.22
+click==8.5.0
+Deprecated==3.0.0
+fastapi==0.143.3
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.9.0
+httpx==0.28.1
+idna==3.20
+limits==5.8.0
+lxml==6.1.3
+opentelemetry-api==1.45.1
+packaging==26.3
+pydantic==2.14.1
+pydantic-settings==2.16.0
+pydantic_core==2.50.1
+python-dotenv==1.2.4
+PyYAML==6.0.3
+slowapi==0.1.10
+soupsieve==3.0.3
+starlette==1.8.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+uvicorn==0.54.0
+watchfiles==1.3.0
+websockets==17.2
+wrapt==2.5.1

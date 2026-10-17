@@ -74,18 +74,13 @@ def get_connection(read_only: bool = False) -> Iterator[sqlite3.Connection]:
 
 
 def migrate(conn: sqlite3.Connection) -> None:
-    """Pone al día una base ya existente. Idempotente y sin perder datos.
-
-    Evita tener que reconstruir el índice entero (que implica descargar el
-    lemario) cada vez que el esquema gana una columna derivada.
-    """
+    """Pone al día una base existente sin reconstruirla. Idempotente."""
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(words)")}
     if not columns:
-        return  # base recién creada: SCHEMA ya trae todo
+        return
 
     if "is_affix" not in columns:
         conn.execute("ALTER TABLE words ADD COLUMN is_affix INTEGER NOT NULL DEFAULT 0")
-        # El relleno usa la misma función que el indexado: una sola fuente de verdad.
         rows = conn.execute("SELECT id, word FROM words").fetchall()
         conn.executemany(
             "UPDATE words SET is_affix = 1 WHERE id = ?",
@@ -101,20 +96,15 @@ def migrate(conn: sqlite3.Connection) -> None:
         )
 
     if "zipf" not in columns:
-        # Estas no se pueden rellenar aquí: los datos son externos y los trae
-        # scripts/enrich_frequency.py. Hasta entonces, todo queda en 'unknown'.
+        # Los datos los trae scripts/enrich_frequency.py; hasta entonces, 'unknown'.
         conn.execute("ALTER TABLE words ADD COLUMN zipf REAL NOT NULL DEFAULT 0")
-        conn.execute(
-            "ALTER TABLE words ADD COLUMN freq_tier TEXT NOT NULL DEFAULT 'unknown'"
-        )
+        conn.execute("ALTER TABLE words ADD COLUMN freq_tier TEXT NOT NULL DEFAULT 'unknown'")
         conn.execute("ALTER TABLE words ADD COLUMN freq_source TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_words_zipf ON words(zipf)")
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    # Migrar ANTES de aplicar el esquema: SCHEMA crea índices sobre columnas
-    # que en una base antigua todavía no existen (las añade migrate). En una
-    # base nueva migrate no hace nada y SCHEMA lo crea todo de una vez.
+    # Migrar antes: SCHEMA indexa columnas que una base antigua aún no tiene.
     migrate(conn)
     conn.executescript(SCHEMA)
 

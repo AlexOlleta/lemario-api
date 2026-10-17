@@ -27,8 +27,8 @@ from pathlib import Path
 # Permite ejecutarlo como script suelto y reutilizar el parser de la app.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import get_settings  # noqa: E402
-from app.services.definitions import _parse_dle_html  # noqa: E402
+from app.config import get_settings
+from app.services.definitions import _parse_dle_html
 
 
 class CloudflareBlocked(Exception):
@@ -53,7 +53,7 @@ def fetch_definition(
             "Playwright no está instalado. Ejecuta:\n"
             "  pip install -r requirements-dev.txt\n"
             "  playwright install chromium"
-        )
+        ) from None
 
     settings = get_settings()
     url = f"{settings.dle_base}/{word}"
@@ -73,9 +73,7 @@ def fetch_definition(
             ),
         )
         # Pequeño parche anti-detección.
-        context.add_init_script(
-            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
-        )
+        context.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined});")
         page = context.new_page()
 
         resolved = False
@@ -85,8 +83,7 @@ def fetch_definition(
                 page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             except Exception:  # noqa: BLE001 - reintentamos
                 continue
-            # Sondea hasta que el reto de Cloudflare se resuelva y aparezca el
-            # artículo (o se agote el tiempo de este intento).
+            # Sondea hasta que se resuelva el reto de Cloudflare o se agote el intento.
             for _ in range(int(timeout_ms / 600)):
                 html = page.content()
                 if not _is_challenge(html) and "<article" in html:
@@ -95,7 +92,7 @@ def fetch_definition(
                 page.wait_for_timeout(600)
             if resolved:
                 break
-            page.wait_for_timeout(1500)  # enfría antes de recargar
+            page.wait_for_timeout(1500)
 
         browser.close()
 
