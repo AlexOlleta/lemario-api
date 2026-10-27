@@ -10,16 +10,13 @@ services:
         required: false
     environment:
       LEMARIO_DATABASE_PATH: /app/data/lemario.db
-      # Docker Desktop entrega las peticiones desde la IP privada del puente.
-      LEMARIO_TRUSTED_NETWORKS: ${LEMARIO_TRUSTED_NETWORKS:-127.0.0.0/8,::1/128,172.16.0.0/12,192.168.0.0/16}
+      # Solo loopback por defecto: tras un proxy (Coolify, Traefik) todo el tráfico
+      # llega desde una IP privada de Docker, y confiar en esas redes abriría /docs
+      # a cualquiera. Para verlo en local con Docker Desktop, ver .env.example.
+      LEMARIO_TRUSTED_NETWORKS: ${LEMARIO_TRUSTED_NETWORKS:-127.0.0.0/8,::1/128}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
-      interval: 30s
-      timeout: 6s
-      retries: 3
-      start_period: 40s
+    # El healthcheck viene en la imagen (HEALTHCHECK del Dockerfile).

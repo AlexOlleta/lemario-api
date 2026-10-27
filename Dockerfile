@@ -21,4 +21,9 @@ USER lemario
 
 EXPOSE 8000
 
+# Con Python porque la imagen slim no trae curl ni wget. start-period largo: sin
+# índice en el volumen, el primer arranque lo construye (~5 min) antes de servir.
+HEALTHCHECK --interval=30s --timeout=6s --start-period=10m --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+
 ENTRYPOINT ["./docker-entrypoint.sh"]

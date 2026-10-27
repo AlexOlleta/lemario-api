@@ -12,12 +12,11 @@ from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 
 from . import __version__
 from .config import get_settings
 from .database import database_exists, get_connection, migrate
-from .limiter import limiter
+from .limiter import default_rate_limit, limiter
 from .routers import definitions, words
 from .security import is_trusted_client, require_trusted_network
 
@@ -61,6 +60,7 @@ app = FastAPI(
     title="Lemario",
     lifespan=lifespan,
     version=__version__,
+    dependencies=[Depends(default_rate_limit)],
     description=(
         "API para obtener palabras en español del lemario de la RAE "
         "(por letra, por longitud, aleatoria) y sus definiciones."
@@ -72,7 +72,6 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

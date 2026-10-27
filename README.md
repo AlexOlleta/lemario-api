@@ -307,7 +307,9 @@ docker run -p 127.0.0.1:8000:8000 -e LEMARIO_API_KEYS=tu_clave \
 ```
 
 O con **docker-compose** (lee `.env` si existe y monta `./data` como volumen).
-Ya publica el puerto solo en `127.0.0.1` y declara las redes internas de Docker:
+Ya publica el puerto solo en `127.0.0.1`. Por defecto solo confía en loopback;
+para abrir `/docs` desde tu máquina con Docker Desktop, añade las redes del
+puente en `.env` (ver `.env.example`), nunca detrás de un proxy:
 
 ```bash
 cp .env.example .env   # opcional: define LEMARIO_API_KEYS y demás
@@ -317,25 +319,8 @@ docker compose up --build
 En Linux, `./data` debe poder escribirlo el uid del contenedor:
 `sudo chown -R 10001:10001 ./data`.
 
-### Pasar a producción más adelante
-
-Hoy está pensado para uso local. Lo que ya está dejado a punto, y lo que se
-cambia cuando llegue el momento:
-
-| Qué | Cómo |
-|-----|------|
-| Rechazar configuraciones inseguras | `LEMARIO_ENVIRONMENT=production`: no arranca sin `LEMARIO_API_KEYS` ni con `LEMARIO_CORS_ORIGINS=*` |
-| Quién ve la documentación | `LEMARIO_TRUSTED_NETWORKS` (solo loopback por defecto) |
-| Exponerlo a la red | `LEMARIO_BIND=0.0.0.0` en `.env` **y** un proxy inverso con HTTPS (Caddy, Nginx, Traefik) delante |
-| IP real del cliente tras el proxy | `FORWARDED_ALLOW_IPS=<IP del proxy>` (nunca `*`). Sin esto, el proxy es "el cliente": el *rate limit* se vuelve global y las redes internas se evalúan mal |
-| Varios workers o réplicas | `WEB_CONCURRENCY=N` y `LEMARIO_RATE_LIMIT_STORAGE=redis://…` (instala `redis`); la API avisa al arrancar si falta |
-| Actualizar el lemario | Cambia `LEMARIO_LIST_BRANCH` (va fijado a un commit) y reconstruye con `--force` |
-| Definiciones | Revisa antes los términos de la RAE y de rae-api.com (ver `NOTICE.md`) |
-
-Pendiente a propósito (solo importa con tráfico real): las consultas de
-definiciones usan SQLite y `BeautifulSoup` de forma síncrona dentro de un
-endpoint `async`, y la caché de definiciones es SQLite (varios procesos
-escribiendo pueden chocar).
+Para exponerla en un servidor (proxy inverso, Coolify, subir un índice ya
+enriquecido), sigue [PRODUCTION.md](PRODUCTION.md).
 
 ## Configuración
 
