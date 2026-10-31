@@ -22,6 +22,11 @@ def _proper_clause(include_proper: bool) -> str:
     return "" if include_proper else " AND is_proper = 0"
 
 
+def _derived_clause(include_derived: bool) -> str:
+    """Las formas derivadas ('lógica' de 'lógico') no son lemas de la RAE."""
+    return "" if include_derived else " AND is_derived = 0"
+
+
 def _freq_clause(tier: str | None, min_zipf: float | None) -> tuple[str, list[object]]:
     """Filtro opcional por frecuencia. Devuelve (SQL, parámetros).
 
@@ -48,6 +53,7 @@ def words_by_letter(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> tuple[int, list[str]]:
@@ -58,6 +64,7 @@ def words_by_letter(
         _phrase_clause(include_phrases)
         + _affix_clause(include_affixes)
         + _proper_clause(include_proper)
+        + _derived_clause(include_derived)
         + freq_sql
     )
     with get_connection(read_only=True) as conn:
@@ -81,6 +88,7 @@ def words_by_length(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> tuple[int, list[str]]:
@@ -90,6 +98,7 @@ def words_by_length(
         _phrase_clause(include_phrases)
         + _affix_clause(include_affixes)
         + _proper_clause(include_proper)
+        + _derived_clause(include_derived)
         + freq_sql
     )
     with get_connection(read_only=True) as conn:
@@ -130,6 +139,7 @@ def words_by_substring(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> tuple[int, list[str]]:
@@ -144,6 +154,7 @@ def words_by_substring(
         _phrase_clause(include_phrases)
         + _affix_clause(include_affixes)
         + _proper_clause(include_proper)
+        + _derived_clause(include_derived)
         + freq_sql
     )
     with get_connection(read_only=True) as conn:
@@ -168,6 +179,7 @@ def words_by_rhyme(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> tuple[int, list[str]]:
@@ -183,6 +195,7 @@ def words_by_rhyme(
         _phrase_clause(include_phrases)
         + _affix_clause(include_affixes)
         + _proper_clause(include_proper)
+        + _derived_clause(include_derived)
         + freq_sql
     )
     where = f"word_norm LIKE ? ESCAPE '\\' AND rhyme_match(word, ?){clause}"
@@ -227,6 +240,7 @@ def words_by_pattern(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> tuple[int, list[str]]:
@@ -242,6 +256,7 @@ def words_by_pattern(
         _phrase_clause(include_phrases)
         + _affix_clause(include_affixes)
         + _proper_clause(include_proper)
+        + _derived_clause(include_derived)
         + freq_sql
     )
     params: list[object] = [like]
@@ -268,6 +283,7 @@ def random_word(
     include_phrases: bool,
     include_affixes: bool,
     include_proper: bool,
+    include_derived: bool,
     tier: str | None = None,
     min_zipf: float | None = None,
 ) -> str | None:
@@ -286,6 +302,8 @@ def random_word(
         conditions.append("is_affix = 0")
     if not include_proper:
         conditions.append("is_proper = 0")
+    if not include_derived:
+        conditions.append("is_derived = 0")
     if tier is not None:
         conditions.append("freq_tier = ?")
         params.append(tier)
@@ -302,13 +320,14 @@ def random_word(
     return row["word"] if row else None
 
 
-def words_details(words: Sequence[str]) -> list[dict | None]:
+def words_details(words: Sequence[str], *, include_derived: bool = True) -> list[dict | None]:
     """Busca varias palabras de una vez. Devuelve una lista alineada con la entrada.
 
     Cada elemento es ``None`` (no está en el lemario) o un dict con la grafía
     oficial y sus metadatos. La búsqueda ignora tildes, así que 'aguila'
     encuentra 'águila'; cuando varias grafías comparten forma normalizada se
     devuelve la primera por orden alfabético (igual que la consulta unitaria).
+    Sin ``include_derived``, las formas derivadas ('lógica') cuentan como ausentes.
     """
     norms = [normalize_word(w) for w in words]
     unique = sorted({n for n in norms if n})
@@ -318,8 +337,9 @@ def words_details(words: Sequence[str]) -> list[dict | None]:
         with get_connection(read_only=True) as conn:
             rows = conn.execute(
                 "SELECT word, word_norm, letter_count, is_phrase, is_affix, is_proper, "
-                "zipf, freq_tier FROM words "
-                f"WHERE word_norm IN ({placeholders}) ORDER BY word",
+                "is_derived, base_word, zipf, freq_tier FROM words "
+                f"WHERE word_norm IN ({placeholders}){_derived_clause(include_derived)} "
+                "ORDER BY word",
                 unique,
             ).fetchall()
         for row in rows:

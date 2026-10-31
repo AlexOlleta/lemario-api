@@ -43,6 +43,15 @@ class Settings(BaseSettings):
     list_repo: str = "rubenperezm/ListadosPalabrasRAE"
     list_branch: str = "379aec4fdfe9c4d678b435a0772b59649693a6a3"
 
+    # Diccionario Hunspell es_ES (LibreOffice / RLA-ES): qué lemas tienen femenino.
+    hunspell_repo: str = "wooorm/dictionaries"
+    hunspell_ref: str = "836d7c2032167880e639a1fe522748733e528c2d"
+    hunspell_dir: str = "data/hunspell"
+    # Confirmación de femeninos contra rae-api.com (scripts/derive_feminines.py).
+    rae_check_delay: float = 6.0
+    rae_check_cache: str = "data/rae_checks.json"
+    rae_check_api_key: str = ""
+
     crea_path: str = "data/crea_lemas.txt"
     freq_list_url: str = (
         "https://raw.githubusercontent.com/hermitdave/FrequencyWords/"

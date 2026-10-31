@@ -126,6 +126,8 @@ def health(request: Request) -> dict:
                 detail["list_file"] = _meta(conn, "list_file")
                 # None = índice sin frecuencias (no se puede filtrar por tier).
                 detail["freq_sources"] = _meta(conn, "freq_sources")
+                # None = sin femeninos derivados (scripts/derive_feminines.py).
+                detail["derived_source"] = _meta(conn, "derived_source")
         except Exception:  # noqa: BLE001 - el healthcheck nunca debe romper
             ready = False
             detail = {}

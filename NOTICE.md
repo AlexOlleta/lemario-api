@@ -7,6 +7,7 @@ atribución que corresponde a cada fuente.
 | Dato | Fuente | Licencia |
 |------|--------|----------|
 | Lemario (lista de palabras) | [rubenperezm/ListadosPalabrasRAE](https://github.com/rubenperezm/ListadosPalabrasRAE), listados obtenidos de [iedra.es](https://iedra.es/); el contenido original es del *Diccionario de la lengua española* de la **Real Academia Española** | Repositorio: Apache-2.0. Los derechos sobre el contenido de la RAE son de la RAE |
+| Femeninos (qué lemas lo tienen) | [Hunspell es_ES](https://github.com/wooorm/dictionaries/tree/main/dictionaries/es), diccionario de LibreOffice del proyecto [RLA-ES](https://github.com/sbosio/rla-es) | GPL-3.0, LGPL-3.0 o MPL-1.1, a elegir (ver `data/hunspell/license`) |
 | Frecuencias de uso (principal) | [CREA anotado](https://www.rae.es/crea-anotado/), **Real Academia Española** | CC BY-SA 4.0 |
 | Frecuencias (secundaria) | [wordfreq](https://github.com/rspeer/wordfreq) | Código MIT; datos CC BY-SA 4.0 (ver su README) |
 | Frecuencias (cola) | [FrequencyWords / OpenSubtitles 2018](https://github.com/hermitdave/FrequencyWords) | CC BY-SA 3.0 |

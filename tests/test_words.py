@@ -176,6 +176,8 @@ def test_exists_returns_official_spelling(client, auth):
         "is_phrase": False,
         "is_affix": False,
         "is_proper": False,
+        "is_derived": False,
+        "base_word": None,
         "zipf": 3.42,
         "tier": "medium",
     }

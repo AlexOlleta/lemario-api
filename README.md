@@ -12,6 +12,10 @@ montándola dentro de otra aplicación.
   [Listados RAE de rubenperezm](https://github.com/rubenperezm/ListadosPalabrasRAE).
   La primera construcción es lenta (descarga + indexado); después las búsquedas
   son instantáneas.
+- ♀️ **Femeninos** que el listado no trae: la RAE guarda «lógico, ca» como
+  `lógico`, así que `lógica` o `niña` no existirían. Se añaden como formas
+  **derivadas** (`is_derived`, con su `base_word`), separadas de los lemas
+  oficiales: unos 10.900, decididos por el diccionario Hunspell de LibreOffice.
 - 🔤 Búsqueda **por primera letra** y **por número de letras**, con paginación.
 - 🧩 Búsqueda **por patrón con comodines** (`c_s_`, `*ción`), para crucigramas
   y escaleras de palabras.
@@ -104,11 +108,43 @@ usada queda registrado y se ve en `/health`.
 
 > Si ya tenías un índice de una versión anterior, **no hace falta
 > reconstruirlo**: al arrancar, la API añade y rellena sola las columnas
-> derivadas que falten (`is_affix`, `is_proper`, frecuencias). En las 89.738
+> derivadas que falten (`is_affix`, `is_proper`, frecuencias, `is_derived`). En las 89.738
 > palabras tarda ~80 ms y solo
 > ocurre una vez.
 
-## 2) Enriquecer con frecuencias (opcional pero recomendado)
+## 2) Añadir los femeninos (opcional pero recomendado)
+
+```bash
+python -m scripts.fetch_hunspell          # descarga Hunspell es_ES a data/hunspell/
+python -m scripts.derive_feminines        # Hunspell + corpus + RAE
+python -m scripts.derive_feminines --no-rae   # sin consultar a la RAE
+```
+
+Va **después** de construir el índice (reconstruirlo borra los femeninos: hay
+que volver a ejecutarlo) y **antes** de las frecuencias, para que también las
+tengan. Quién decide si un lema tiene femenino:
+
+1. **[Hunspell es_ES](https://github.com/wooorm/dictionaries/tree/main/dictionaries/es)**,
+   el corrector de LibreOffice, si conoce el lema: su marca `G` significa
+   "tiene femenino" (`lógico` sí, `pórtico` no). Aporta unos 9.400. Va fijado a
+   un commit (`LEMARIO_HUNSPELL_REF`) y la copia queda en `data/hunspell/`.
+2. Si Hunspell no lo conoce, solo las **esdrújulas en `-ico`** (`tautológico`,
+   `nigromántico`), que en el DLE son casi siempre «-ico, ca». Se confirman con
+   el corpus (OpenSubtitles o wordfreq) y, si no aparecen, preguntando a
+   rae-api.com: unas 930 consultas. Sin clave, la cuota (100 al día) se agota
+   enseguida y el script espera a que se renueve, así que **lleva días**. Con
+   una [clave gratuita](https://rae-api.com/login) en
+   `LEMARIO_RAE_CHECK_API_KEY` y `LEMARIO_RAE_CHECK_DELAY=1.5`, unos 25 minutos.
+   Las respuestas se guardan en `data/rae_checks.json`; si lo cortas, retoma
+   donde lo dejó y nunca repite una consulta.
+3. El resto de lemas que Hunspell no conoce y que **podrían** tener femenino
+   por su terminación no se añaden: el femenino posible queda apuntado en la
+   columna `feminine_candidate`, sin confirmar, para una revisión futura.
+
+Las búsquedas, la rima, la palabra aleatoria y `/words/exists` incluyen los
+femeninos por defecto; `?include_derived=false` los excluye.
+
+## 3) Enriquecer con frecuencias (opcional pero recomendado)
 
 ```bash
 pip install wordfreq                       # fuente secundaria
@@ -181,7 +217,7 @@ Zipf es log10 de apariciones por mil millones de palabras: 6 es `de`, 4 ronda
 el vocabulario cotidiano, 2 es una palabra que casi nadie usa. `?tier=` pide un
 nivel **exacto**; `?min_zipf=` pide *"esta frecuencia o más"*.
 
-## 3) Arrancar la API
+## 4) Arrancar la API
 
 ```bash
 uvicorn app.main:app --reload
@@ -342,6 +378,12 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
 | `LEMARIO_HTTP_RETRIES` | `2` | Reintentos de llamadas externas |
 | `LEMARIO_LIST_REPO` | `rubenperezm/ListadosPalabrasRAE` | Repo del lemario |
 | `LEMARIO_LIST_BRANCH` | *(un commit)* | Rama, etiqueta o commit del repo (fijado a un commit) |
+| `LEMARIO_HUNSPELL_REPO` | `wooorm/dictionaries` | Repo del diccionario Hunspell |
+| `LEMARIO_HUNSPELL_REF` | *(un commit)* | Commit de Hunspell (fijado, como el lemario) |
+| `LEMARIO_HUNSPELL_DIR` | `data/hunspell` | Dónde se guarda la copia de Hunspell |
+| `LEMARIO_RAE_CHECK_DELAY` | `6` | Segundos entre consultas a la RAE en `derive_feminines.py` |
+| `LEMARIO_RAE_CHECK_CACHE` | `data/rae_checks.json` | Respuestas ya obtenidas de la RAE |
+| `LEMARIO_RAE_CHECK_API_KEY` | *(vacío)* | Clave de rae-api.com para `derive_feminines.py` (más cuota) |
 | `LEMARIO_CREA_PATH` | `data/crea_lemas.txt` | Fichero de lemas de CREA (local, no se descarga) |
 | `LEMARIO_FREQ_LIST_URL` | *(OpenSubtitles 2018)* | Lista de frecuencias para `enrich_frequency.py` |
 
@@ -359,10 +401,11 @@ Variables de entorno (prefijo `LEMARIO_`, ver `.env.example`):
   Necesita `pip install -r requirements-dev.txt` y `playwright install chromium`
   (el navegador no viene con el paquete). Uso: `python -m scripts.fetch_definition_playwright casa`.
 - **Es un lemario, no un corpus de formas.** Están `correr` y `casa`, no
-  `corría` ni `casas`. Para un diccionario es lo correcto; un juego que valide
-  los intentos del jugador con `/words/exists` rechazará plurales y verbos
-  conjugados. Añadirlos es el siguiente paso natural del proyecto.
-- **Las frecuencias son un paso manual.** No se construyen dentro de la imagen
+  `corría` ni `casas`; de las formas flexionadas solo se añaden los femeninos.
+  Un juego que valide los intentos del jugador con `/words/exists` rechazará
+  plurales y verbos conjugados. Hunspell también los describe (marcas `S` y de
+  conjugación), así que es la fuente natural para añadirlos más adelante.
+- **Los femeninos y las frecuencias son pasos manuales.** No se construyen dentro de la imagen
   Docker: hay que ejecutar `scripts/enrich_frequency.py` (y descargar antes el
   fichero de CREA) sobre el volumen de datos.
 - Respeta los términos de uso de las fuentes y los límites de tasa para no

@@ -165,8 +165,11 @@ def enrich(
     updates: list[tuple[float, str, str | None, int]] = []
     with get_connection() as conn:
         init_schema(conn)
-        for row in conn.execute("SELECT id, word FROM words").fetchall():
-            zipf, source = resolve_zipf(row["word"], crea, zipf_frequency, counts, corpus_total)
+        for row in conn.execute("SELECT id, word, is_derived FROM words").fetchall():
+            # CREA cuenta lemas: el uso de 'niña' está dentro de 'niño' y su entrada
+            # propia es residual. Las formas derivadas se miden con las otras fuentes.
+            row_crea = {} if row["is_derived"] else crea
+            zipf, source = resolve_zipf(row["word"], row_crea, zipf_frequency, counts, corpus_total)
             stats[source or "unknown"] += 1
             updates.append((zipf, tier_for(zipf), source, row["id"]))
 

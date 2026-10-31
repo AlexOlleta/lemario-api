@@ -35,8 +35,9 @@ El contenedor guarda el índice y la caché de definiciones en `/app/data`, que
 debe ser un volumen persistente con permiso de escritura para el uid 10001.
 
 Si el volumen está vacío, el primer arranque construye el índice (~5 min, la
-API no responde mientras tanto) pero **sin frecuencias**. Para usar uno ya
-enriquecido, súbelo antes de arrancar:
+API no responde mientras tanto) pero **sin femeninos ni frecuencias**: esos
+pasos se hacen en tu máquina (ver README, pasos 2 y 3). Para usar un índice ya
+completo, súbelo antes de arrancar:
 
 ```bash
 # En tu máquina: copia consistente de la base y subida al servidor.

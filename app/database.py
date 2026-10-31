@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS words (
     is_proper    INTEGER NOT NULL DEFAULT 0,  -- nombre propio ('Madrid'), no sigla
     zipf         REAL    NOT NULL DEFAULT 0,  -- frecuencia de uso; 0 = sin datos
     freq_tier    TEXT    NOT NULL DEFAULT 'unknown',
-    freq_source  TEXT                         -- 'wordfreq' | 'opensubtitles'
+    freq_source  TEXT,                        -- 'wordfreq' | 'opensubtitles'
+    is_derived   INTEGER NOT NULL DEFAULT 0,  -- forma generada, no lema RAE ('lógica')
+    base_word    TEXT,                        -- lema del que sale ('lógico'); NULL si es lema
+    feminine_candidate TEXT                   -- femenino posible, sin confirmar
 );
 CREATE INDEX IF NOT EXISTS idx_words_first_letter ON words(first_letter);
 CREATE INDEX IF NOT EXISTS idx_words_letter_count ON words(letter_count);
@@ -101,6 +104,12 @@ def migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE words ADD COLUMN freq_tier TEXT NOT NULL DEFAULT 'unknown'")
         conn.execute("ALTER TABLE words ADD COLUMN freq_source TEXT")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_words_zipf ON words(zipf)")
+
+    if "is_derived" not in columns:
+        # Los rellena scripts/derive_feminines.py; hasta entonces todo es lema.
+        conn.execute("ALTER TABLE words ADD COLUMN is_derived INTEGER NOT NULL DEFAULT 0")
+        conn.execute("ALTER TABLE words ADD COLUMN base_word TEXT")
+        conn.execute("ALTER TABLE words ADD COLUMN feminine_candidate TEXT")
 
 
 def init_schema(conn: sqlite3.Connection) -> None:

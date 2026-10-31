@@ -75,6 +75,9 @@ def by_letter(
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
     ),
@@ -91,6 +94,7 @@ def by_letter(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
@@ -117,6 +121,9 @@ def by_length(
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
     ),
@@ -133,6 +140,7 @@ def by_length(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
@@ -163,6 +171,9 @@ def search(
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
     ),
@@ -180,6 +191,7 @@ def search(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
@@ -217,6 +229,9 @@ def pattern(
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
     ),
@@ -239,6 +254,7 @@ def pattern(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
@@ -272,6 +288,9 @@ def rhymes(
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
     ),
@@ -284,8 +303,8 @@ def rhymes(
     La tilde es estricta: 'anto' encuentra 'canto' pero no 'cantó', y 'ó' sí
     encuentra 'cantó'. Con tilde en la terminación se añaden los monosílabos,
     que no la llevan ('ón' encuentra 'canción' y también 'son'). Sin tilde, la
-    terminación es literal. La rima se busca sobre el lemario, que casi no trae
-    formas conjugadas ni plurales.
+    terminación es literal. La rima se busca sobre el lemario y sus femeninos
+    ('lógica'); no trae formas conjugadas ni plurales.
     """
     ending = ending.strip()
     if not ending.isalpha():
@@ -302,6 +321,7 @@ def rhymes(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
@@ -326,6 +346,8 @@ def _to_exists(query: str, details: dict | None) -> WordExists:
         is_phrase=bool(details["is_phrase"]),
         is_affix=bool(details["is_affix"]),
         is_proper=bool(details["is_proper"]),
+        is_derived=bool(details["is_derived"]),
+        base_word=details["base_word"],
         zipf=details["zipf"],
         tier=details["freq_tier"],
     )
@@ -341,6 +363,9 @@ def exists_batch(
         max_length=100,
         description="Palabra a comprobar; repite el parámetro para varias.",
     ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
 ) -> WordExistsList:
     """Comprueba varias palabras de una vez (una sola consulta a SQLite).
 
@@ -355,7 +380,9 @@ def exists_batch(
         )
     results = [
         _to_exists(word, details)
-        for word, details in zip(w, repository.words_details(w), strict=True)
+        for word, details in zip(
+            w, repository.words_details(w, include_derived=include_derived), strict=True
+        )
     ]
     return WordExistsList(count=len(results), results=results)
 
@@ -365,6 +392,9 @@ def exists_batch(
 def exists(
     request: Request,
     word: str = Path(..., min_length=1, max_length=80, description="Palabra a comprobar."),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
+    ),
 ) -> WordExists:
     """¿Está la palabra en el lemario? Responde 200 tanto si sí como si no.
 
@@ -374,7 +404,8 @@ def exists(
     acepta tal cual. No sale a la red.
     """
     _ensure_db()
-    return _to_exists(word, repository.word_details(word))
+    details = repository.words_details([word], include_derived=include_derived)[0]
+    return _to_exists(word, details)
 
 
 @router.get("/random", response_model=RandomWord)
@@ -388,6 +419,9 @@ def random(
     ),
     include_proper: bool = Query(
         False, description="Incluir nombres propios ('Madrid'); las siglas no lo son."
+    ),
+    include_derived: bool = Query(
+        True, description="Incluir formas derivadas del lema: femeninos ('lógica' de 'lógico')."
     ),
     tier: Tier | None = Query(
         None, description="Nivel de frecuencia exacto: common, medium, rare o unknown."
@@ -404,6 +438,7 @@ def random(
         include_phrases=include_phrases,
         include_affixes=include_affixes,
         include_proper=include_proper,
+        include_derived=include_derived,
         tier=tier_name,
         min_zipf=min_zipf,
     )
